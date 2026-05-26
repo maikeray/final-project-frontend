@@ -2,7 +2,8 @@ import { Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { map, finalize } from 'rxjs/operators';
+import { map, finalize, catchError } from 'rxjs/operators';
+import { of } from 'rxjs';
 
 import { environment } from '@environments/environment';
 import { Account } from '@app/_models';
@@ -14,11 +15,13 @@ export class AccountService {
     private accountSubject: BehaviorSubject<Account | null>;
     public account: Observable<Account | null>;
 
-    constructor(
+        constructor(
         private router: Router,
         private http: HttpClient
     ) {
-        this.accountSubject = new BehaviorSubject<Account | null>(null);
+        const storedAccount = localStorage.getItem('account');
+        const initialAccount = storedAccount ? JSON.parse(storedAccount) : null;
+        this.accountSubject = new BehaviorSubject<Account | null>(initialAccount);
         this.account = this.accountSubject.asObservable();
     }
 
@@ -27,29 +30,36 @@ export class AccountService {
     }
 
     login(email: string, password: string) {
-        return this.http.post<any>(`${baseUrl}/authenticate`, { email, password }, { withCredentials: true })
-            .pipe(map(account => {
-                this.accountSubject.next(account);
-                this.startRefreshTokenTimer();
-                return account;
-            }));
-    }
+    return this.http.post<any>(`${baseUrl}/authenticate`, { email, password }, { withCredentials: true })
+        .pipe(map(account => {
+            localStorage.setItem('account', JSON.stringify(account));
+            this.accountSubject.next(account);
+            this.startRefreshTokenTimer();
+            return account;
+        }));
+}
 
     logout() {
+        localStorage.removeItem('account');
         this.http.post<any>(`${baseUrl}/revoke-token`, {}, { withCredentials: true }).subscribe();
         this.stopRefreshTokenTimer();
         this.accountSubject.next(null);
         this.router.navigate(['/account/login']);
-    }
+}
 
-    refreshToken() {
-        return this.http.post<any>(`${baseUrl}/refresh-token`, {}, { withCredentials: true })
-            .pipe(map((account) => {
+refreshToken() {
+    return this.http.post<any>(`${baseUrl}/refresh-token`, {}, { withCredentials: true })
+        .pipe(
+            map((account) => {
                 this.accountSubject.next(account);
                 this.startRefreshTokenTimer();
                 return account;
-            }));
-    }
+            }),
+            catchError(() => {
+                return of(null);
+            })
+        );
+}
 
     register(params: any) {
         return this.http.post(`${baseUrl}/register`, params);
@@ -104,13 +114,9 @@ export class AccountService {
 
     private refreshTokenTimeout?: any;
 
-    private startRefreshTokenTimer() {
-        const jwtBase64 = this.accountValue!.jwtToken!.split('.')[1];
-        const jwtToken = JSON.parse(atob(jwtBase64));
-        const expires = new Date(jwtToken.exp * 1000);
-        const timeout = expires.getTime() - Date.now() - (60 * 1000);
-        this.refreshTokenTimeout = setTimeout(() => this.refreshToken().subscribe(), timeout);
-    }
+private startRefreshTokenTimer() {
+    // Disabled for cross-domain deployment
+}
 
     private stopRefreshTokenTimer() {
         clearTimeout(this.refreshTokenTimeout);
