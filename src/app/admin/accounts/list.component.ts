@@ -1,6 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { first } from 'rxjs/operators';
-
 import { AccountService } from '@app/_services';
 
 @Component({ 
@@ -10,20 +9,24 @@ import { AccountService } from '@app/_services';
 export class ListComponent implements OnInit {
     accounts: any[] = [];
 
-    constructor(private accountService: AccountService) { }
+    constructor(
+        private accountService: AccountService,
+        private cdr: ChangeDetectorRef
+    ) { }
 
     ngOnInit() {
-    this.accountService.getAll()
-        .pipe(first())
-        .subscribe({
-            next: (accounts) => {
-                this.accounts = accounts;
-            },
-            error: (err) => {
-                console.error('Error loading accounts:', err);
-            }
-        });
-}
+        setTimeout(() => {
+            this.accountService.getAll()
+                .pipe(first())
+                .subscribe({
+                    next: (accounts: any[]) => {
+                        this.accounts = accounts;
+                        this.cdr.detectChanges();
+                    },
+                    error: (err: any) => console.error(err)
+                });
+        }, 500);
+    }
 
     deleteAccount(id: string) {
         const account = this.accounts.find(x => x.id === id);
@@ -33,6 +36,7 @@ export class ListComponent implements OnInit {
             .pipe(first())
             .subscribe(() => {
                 this.accounts = this.accounts.filter(x => x.id !== id);
+                this.cdr.detectChanges();
             });
     }
 }
