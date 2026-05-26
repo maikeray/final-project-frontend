@@ -13,10 +13,17 @@ export class ListComponent implements OnInit {
     constructor(private accountService: AccountService) { }
 
     ngOnInit() {
-        this.accountService.getAll()
-            .pipe(first())
-            .subscribe(accounts => this.accounts = accounts);
-    }
+    this.accountService.getAll()
+        .pipe(first())
+        .subscribe({
+            next: (accounts) => {
+                this.accounts = accounts;
+            },
+            error: (err) => {
+                console.error('Error loading accounts:', err);
+            }
+        });
+}
 
     deleteAccount(id: string) {
         const account = this.accounts.find(x => x.id === id);
